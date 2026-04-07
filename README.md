@@ -40,3 +40,35 @@ Minimizing the GUI will hide it from the taskbar, so that it'll only be visible 
 # Dithering
 
 Applying any kind of calibration on the GPU-level usually results in banding unless dithering is used. By default, NVIDIA GPUs do not apply dithering to full range RGB output. Therefore, it is recommended that you use the dither controls to enable and configure dithering. "Bits" should be set to match the bit depth of your GPU output, and "Mode" can be set to whatever looks best to you. Note that "Temporal" works by rapidly switching between colors, which some people's eyes are sensitive to.
+
+# Building from source
+
+A PowerShell helper script `build.ps1` at the repository root produces a minimal Release build. From a PowerShell prompt in the repository root:
+
+```
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+## Prerequisites
+
+The build needs two free Microsoft components. **You do not need to download them yourself** — `build.ps1` checks for each one before doing anything else, and if something is missing it prints a clear error and offers to open the official download page in your default browser. Just answer **Y** at the prompt and the page opens; install the component and run the script again.
+
+The two prerequisites the script checks for, in order:
+
+1. **Visual Studio Build Tools 2019 or 2022** (free) — provides MSBuild and the C# compiler. When you install it, make sure the **".NET desktop build tools"** workload is selected (it isn't by default in the minimal install).
+   * Download: <https://aka.ms/vs/17/release/vs_BuildTools.exe> (direct, official, ~3 MB bootstrapper)
+2. **.NET Framework 4.8 Developer Pack** — provides the v4.8 reference assemblies that MSBuild needs to compile against `TargetFrameworkVersion=v4.8`. This is a small (~70 MB) standalone install.
+   * Download: <https://dotnet.microsoft.com/download/dotnet-framework/net48> (look for the *Developer Pack* link in the right column — not the runtime)
+
+If both are already installed, the prerequisite checks complete in under a second and the build proceeds.
+
+## What the script does
+
+After the prerequisite checks, the script:
+
+* Refuses to build if `novideo_srgb.exe` is currently running (close it from the tray icon first — MSBuild cannot overwrite a locked binary).
+* Restores the three NuGet packages (`EDIDParser`, `NvAPIWrapper.Net`, `WindowsDisplayAPI`) into `.\packages\` from nuget.org. This is the only step that requires an internet connection.
+* Builds `Release|x64` with PDB and XML doc files stripped (`DebugType=none`, `AllowedReferenceRelatedFileExtensions=.allowedextensions`).
+* Stages the minimal runtime output (~770 KB total) in `.\release\`, containing only `novideo_srgb.exe`, its `.config`, and the three dependency DLLs.
+
+The contents of `.\release\` are equivalent to the official `release.zip` — copy them somewhere under your user directory and run `novideo_srgb.exe`.
