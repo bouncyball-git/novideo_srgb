@@ -1,4 +1,4 @@
-## [Download latest release](https://github.com/ledoge/novideo_srgb/releases/latest/download/release.zip)
+## [Download latest release](https://github.com/bouncyball-git/novideo_srgb/releases/download/v4.3/novideo_srgb_v4.3.zip)
 
 # About
 This tool uses an undocumented NVIDIA API, supported on Fermi and later, to convert colors before sending them to a wide gamut monitor to effectively clamp it to sRGB (alternatively: Display P3, Adobe RGB or BT.2020), based on the chromaticities provided in its EDID. AMD supports this as a hidden setting in their drivers, but NVIDIA doesn't because ???.
