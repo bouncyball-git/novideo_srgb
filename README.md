@@ -67,8 +67,9 @@ If both are already installed, the prerequisite checks complete in under a secon
 After the prerequisite checks, the script:
 
 * Refuses to build if `novideo_srgb.exe` is currently running (close it from the tray icon first — MSBuild cannot overwrite a locked binary).
+* **Wipes** the output directory (`novideo_srgb\bin\x64\Release\`) so no stale `.pdb`, `.xml`, or orphaned files from a previous build can leak into the result.
 * Restores the three NuGet packages (`EDIDParser`, `NvAPIWrapper.Net`, `WindowsDisplayAPI`) into `.\packages\` from nuget.org. This is the only step that requires an internet connection.
 * Builds `Release|x64` with PDB and XML doc files stripped (`DebugType=none`, `AllowedReferenceRelatedFileExtensions=.allowedextensions`).
-* Stages the minimal runtime output (~770 KB total) in `.\release\`, containing only `novideo_srgb.exe`, its `.config`, and the three dependency DLLs.
+* Verifies that exactly the five expected runtime files are in the output directory and warns if anything unexpected appears there.
 
-The contents of `.\release\` are equivalent to the official `release.zip` — copy them somewhere under your user directory and run `novideo_srgb.exe`.
+The output (~770 KB total) lands in `novideo_srgb\bin\x64\Release\` and contains only `novideo_srgb.exe`, its `.config`, and the three dependency DLLs (`EDIDParser.dll`, `NvAPIWrapper.dll`, `WindowsDisplayAPI.dll`). That folder's contents are equivalent to the official `release.zip` — copy them somewhere under your user directory and run `novideo_srgb.exe`.

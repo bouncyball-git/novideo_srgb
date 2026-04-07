@@ -5,8 +5,10 @@
     novideo_srgb minimal release build.
 
 .DESCRIPTION
-    Restores NuGet packages, builds Release|x64 with PDB and XML doc
-    files stripped, and stages a clean minimal output in .\release\.
+    Restores NuGet packages and builds Release|x64 with PDB and XML doc
+    files stripped. The output directory is wiped before each build so
+    only the runtime files (exe + 3 dependency DLLs + .config) end up
+    inside it -- no stale artifacts from previous builds.
 
     Requires Visual Studio 2019/2022 Build Tools (MSBuild + .NET
     Framework 4.8 targeting pack).
@@ -104,7 +106,17 @@ Write-Host ''
 
 $sln    = 'novideo_srgb.sln'
 $outDir = 'novideo_srgb\bin\x64\Release'
-$stage  = 'release'
+
+# --- Wipe previous output for a guaranteed-clean build ----------------------
+# MSBuild's -t:Rebuild only cleans files it tracked itself. To make sure no
+# stale .pdb / .xml / orphaned dependency from a prior build (or a different
+# configuration) leaks into the output, blow the directory away entirely
+# before the build runs.
+if (Test-Path -LiteralPath $outDir) {
+    Write-Host "=== Wiping previous output: $outDir ===" -ForegroundColor Cyan
+    Remove-Item -LiteralPath $outDir -Recurse -Force
+    Write-Host ''
+}
 
 # --- Restore NuGet packages -------------------------------------------------
 Write-Host '=== Restoring NuGet packages ===' -ForegroundColor Cyan
@@ -143,32 +155,33 @@ if (-not (Test-Path -LiteralPath $exePath)) {
     throw "Expected output file not found at: $exePath"
 }
 
-# --- Stage minimal output ---------------------------------------------------
-Write-Host "=== Staging minimal release to .\$stage\ ===" -ForegroundColor Cyan
-if (Test-Path -LiteralPath $stage) {
-    Remove-Item -LiteralPath $stage -Recurse -Force
-}
-New-Item -ItemType Directory -Path $stage | Out-Null
-
-$runtimeFiles = @(
+# --- Verify output is exactly what we expect (no stale files) ---------------
+$expectedFiles = @(
     'novideo_srgb.exe'
     'novideo_srgb.exe.config'
     'EDIDParser.dll'
     'NvAPIWrapper.dll'
     'WindowsDisplayAPI.dll'
 )
-foreach ($f in $runtimeFiles) {
-    $src = Join-Path $outDir $f
-    if (-not (Test-Path -LiteralPath $src)) {
-        throw "Expected build artifact missing: $src"
+foreach ($f in $expectedFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $outDir $f))) {
+        throw "Expected build artifact missing: $f"
     }
-    Copy-Item -LiteralPath $src -Destination $stage -Force
+}
+
+# Warn (but don't fail) if MSBuild ever produces extras we didn't anticipate.
+$actual = Get-ChildItem -LiteralPath $outDir -File | Select-Object -ExpandProperty Name
+$unexpected = $actual | Where-Object { $_ -notin $expectedFiles }
+if ($unexpected) {
+    Write-Host ''
+    Write-Host 'WARNING: unexpected files in output directory:' -ForegroundColor Yellow
+    foreach ($f in $unexpected) { Write-Host "  $f" -ForegroundColor Yellow }
 }
 
 # --- Report -----------------------------------------------------------------
 Write-Host ''
 Write-Host '=== Output ===' -ForegroundColor Cyan
-$items = Get-ChildItem -LiteralPath $stage -File | Sort-Object Name
+$items = Get-ChildItem -LiteralPath $outDir -File | Sort-Object Name
 $total = 0
 foreach ($item in $items) {
     Write-Host ('  {0,-30} {1,12:N0} bytes' -f $item.Name, $item.Length)
@@ -177,4 +190,4 @@ foreach ($item in $items) {
 Write-Host ('  {0,-30} {1,12}' -f '----------', '------------')
 Write-Host ('  {0,-30} {1,12:N0} bytes' -f 'Total', $total)
 Write-Host ''
-Write-Host "Done. Release build is in: $((Resolve-Path -LiteralPath $stage).Path)" -ForegroundColor Green
+Write-Host "Done. Release build is in: $((Resolve-Path -LiteralPath $outDir).Path)" -ForegroundColor Green
