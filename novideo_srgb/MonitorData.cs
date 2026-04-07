@@ -26,9 +26,11 @@ namespace novideo_srgb
 
         public MonitorData(MainViewModel viewModel, int number, Display display, string path, bool hdrActive, bool clampSdr)
         {
+            Logger.Log("MonitorData ctor #" + number + ": start, path='" + path + "' hdrActive=" + hdrActive);
             _viewModel = viewModel;
             Number = number;
             _output = display.Output;
+            Logger.Log("MonitorData ctor #" + number + ": GPUOutput acquired");
 
             _bitDepth = 0;
             try
@@ -44,15 +46,27 @@ namespace novideo_srgb
                     _bitDepth = 12;
                 else if (bitDepth == ColorDataDepth.BPC16)
                     _bitDepth = 16;
+                Logger.Log("MonitorData ctor #" + number + ": bitDepth=" + _bitDepth);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Logger.LogException("MonitorData ctor #" + number + ": CurrentColorData.ColorDepth threw (suppressed)", ex);
             }
 
-            Edid = Novideo.GetEDID(path, display);
+            try
+            {
+                Edid = Novideo.GetEDID(path, display);
+                Logger.Log("MonitorData ctor #" + number + ": EDID read ok");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("MonitorData ctor #" + number + ": GetEDID threw", ex);
+                throw;
+            }
 
             Name = Edid.Descriptors.OfType<StringDescriptor>()
                 .FirstOrDefault(x => x.Type == StringDescriptorType.MonitorName)?.Value ?? "<no name>";
+            Logger.Log("MonitorData ctor #" + number + ": Name='" + Name + "'");
 
             Path = path;
             ClampSdr = clampSdr;
@@ -66,13 +80,41 @@ namespace novideo_srgb
                 Blue = new Colorimetry.Point { X = Math.Round(coords.BlueX, 3), Y = Math.Round(coords.BlueY, 3) },
                 White = Colorimetry.D65
             };
+            Logger.Log("MonitorData ctor #" + number + ": EdidColorSpace built (R=" + EdidColorSpace.Red.X + "," + EdidColorSpace.Red.Y +
+                       " G=" + EdidColorSpace.Green.X + "," + EdidColorSpace.Green.Y +
+                       " B=" + EdidColorSpace.Blue.X + "," + EdidColorSpace.Blue.Y + ")");
 
-            _dither = Novideo.GetDitherControl(_output);
-            _clamped = Novideo.IsColorSpaceConversionActive(_output);
+            try
+            {
+                _dither = Novideo.GetDitherControl(_output);
+                Logger.Log("MonitorData ctor #" + number + ": GetDitherControl ok state=" + _dither.state +
+                           " bits=" + _dither.bits + " mode=" + _dither.mode);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException("MonitorData ctor #" + number + ": GetDitherControl threw", ex);
+                throw;
+            }
+
+            try
+            {
+                _clamped = Novideo.IsColorSpaceConversionActive(_output);
+                Logger.Log("MonitorData ctor #" + number + ": IsColorSpaceConversionActive=" + _clamped);
+            }
+            catch (Exception ex)
+            {
+                // Some configurations (e.g. 10bpc on certain Samsung OLEDs, or HDR-adjacent modes on
+                // newer NVIDIA drivers) reject NvAPI_GPU_GetColorSpaceConversion with -104
+                // (NVAPI_NOT_SUPPORTED). Treat as "not clamped" so the app can still start; the user
+                // will see the monitor in the list and get a visible error if they try to clamp it.
+                Logger.LogException("MonitorData ctor #" + number + ": IsColorSpaceConversionActive threw (suppressed)", ex);
+                _clamped = false;
+            }
 
             ProfilePath = "";
             CustomGamma = 2.2;
             CustomPercentage = 100;
+            Logger.Log("MonitorData ctor #" + number + ": done");
         }
 
         public MonitorData(MainViewModel viewModel, int number, Display display, string path, bool hdrActive, bool clampSdr, bool useIcc, string profilePath,
@@ -155,8 +197,18 @@ namespace novideo_srgb
 
         private void HandleClampException(Exception e)
         {
+            Logger.LogException("HandleClampException", e);
             MessageBox.Show(e.Message);
-            _clamped = Novideo.IsColorSpaceConversionActive(_output);
+            try
+            {
+                _clamped = Novideo.IsColorSpaceConversionActive(_output);
+            }
+            catch (Exception ex2)
+            {
+                // Same -104 path as in the ctor — don't let the recovery code crash the app.
+                Logger.LogException("HandleClampException: re-query IsColorSpaceConversionActive threw", ex2);
+                _clamped = false;
+            }
             ClampSdr = _clamped;
             _viewModel.SaveConfig();
             OnPropertyChanged(nameof(Clamped));

@@ -17,28 +17,43 @@ namespace novideo_srgb
 
         public MainWindow()
         {
-            if (Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Length > 1)
+            Logger.Log("MainWindow ctor: start");
+
+            var procName = Process.GetCurrentProcess().ProcessName;
+            var sameNameCount = Process.GetProcessesByName(procName).Length;
+            Logger.Log("MainWindow ctor: process name='" + procName + "', same-name count=" + sameNameCount);
+            if (sameNameCount > 1)
             {
+                Logger.Log("MainWindow ctor: another instance detected, exiting");
                 MessageBox.Show("Already running!");
                 Close();
                 return;
             }
 
+            Logger.Log("MainWindow ctor: calling InitializeComponent (this constructs MainViewModel via XAML DataContext)");
             InitializeComponent();
+            Logger.Log("MainWindow ctor: InitializeComponent returned");
+
             _viewModel = (MainViewModel)DataContext;
+            Logger.Log("MainWindow ctor: DataContext assigned, monitor count=" + (_viewModel?.Monitors?.Count ?? -1));
+
             SystemEvents.DisplaySettingsChanged += _viewModel.OnDisplaySettingsChanged;
             SystemEvents.PowerModeChanged += _viewModel.OnPowerModeChanged;
+            Logger.Log("MainWindow ctor: SystemEvents wired");
 
             var args = Environment.GetCommandLineArgs().ToList();
             args.RemoveAt(0);
 
             if (args.Contains("-minimize"))
             {
+                Logger.Log("MainWindow ctor: -minimize present, hiding window");
                 WindowState = WindowState.Minimized;
                 Hide();
             }
 
+            Logger.Log("MainWindow ctor: initializing tray icon");
             InitializeTrayIcon();
+            Logger.Log("MainWindow ctor: done");
         }
 
         protected override void OnStateChanged(EventArgs e)
